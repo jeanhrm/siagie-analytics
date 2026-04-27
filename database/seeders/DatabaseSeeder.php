@@ -11,24 +11,28 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Crear institución de prueba
-        $institution = Institution::create([
-            'name'          => 'IE 36006 Huancavelica',
-            'code'          => '36006',
-            'ugel'          => 'UGEL Huancavelica',
-            'district'      => 'Huancavelica',
-            'province'      => 'Huancavelica',
-            'region'        => 'Huancavelica',
-            'level'         => 'secundaria',
-            'director_name' => 'Director de Prueba',
-        ]);
+        // Solo crea si no existe
+        $institution = Institution::firstOrCreate(
+            ['code' => '36006'],
+            [
+                'name'          => 'IE 36006 Huancavelica',
+                'ugel'          => 'UGEL Huancavelica',
+                'district'      => 'Huancavelica',
+                'province'      => 'Huancavelica',
+                'region'        => 'Huancavelica',
+                'level'         => 'secundaria',
+                'director_name' => 'Director de Prueba',
+            ]
+        );
 
-        // Crear usuario administrador
-        User::create([
-            'name'           => 'Administrador',
-            'email'          => 'admin@siagie.test',
-            'password'       => Hash::make('password'),
-            'institution_id' => $institution->id,
-        ]);
+        // Solo crea si no existe
+        User::firstOrCreate(
+            ['email' => 'admin@siagie.test'],
+            [
+                'name'           => 'Administrador',
+                'password'       => Hash::make('password'),
+                'institution_id' => $institution->id,
+            ]
+        );
     }
 }
