@@ -2,24 +2,33 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use App\Models\Institution;
+use App\Models\User;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Crear institución de prueba
+        $institution = Institution::create([
+            'name'          => 'IE 36006 Huancavelica',
+            'code'          => '36006',
+            'ugel'          => 'UGEL Huancavelica',
+            'district'      => 'Huancavelica',
+            'province'      => 'Huancavelica',
+            'region'        => 'Huancavelica',
+            'level'         => 'secundaria',
+            'director_name' => 'Director de Prueba',
+        ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // Crear usuario administrador
+        User::create([
+            'name'           => 'Administrador',
+            'email'          => 'admin@siagie.test',
+            'password'       => Hash::make('password'),
+            'institution_id' => $institution->id,
         ]);
     }
 }
