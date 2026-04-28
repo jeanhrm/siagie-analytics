@@ -22,11 +22,11 @@ class AnalysisController extends Controller
         return view('analysis.index', compact('reports'));
     }
 
-    public function generate($uploadId)
+    public function generate(Upload $upload)
     {
-        $upload = Upload::where('id', $uploadId)
-            ->where('institution_id', auth()->user()->institution_id)
-            ->firstOrFail();
+        if ($upload->institution_id !== auth()->user()->institution_id) {
+        abort(403);
+        }
 
         // Leer Excel
         $data = Excel::toArray([], storage_path('app/public/uploads/' . $upload->filename));

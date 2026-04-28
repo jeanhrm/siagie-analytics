@@ -105,10 +105,12 @@
             <div class="flex items-center gap-3">
                 @if($upload->status === 'done')
                     <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">Procesado</span>
-                    <a href="{{ route('analysis.generate', $upload) }}"
-                        class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition-all">
-                        Analizar con IA
-                    </a>
+                    <form action="{{ route('analysis.generate', $upload) }}" method="POST" style="display:inline">
+                        @csrf
+                        <button type="submit" class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition-all">
+                            Analizar con IA
+                        </button>
+                    </form>
                 @elseif($upload->status === 'processing')
                     <span class="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-medium">Procesando...</span>
                 @elseif($upload->status === 'error')
