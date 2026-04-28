@@ -1,20 +1,49 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\UploadController;
+use App\Http\Controllers\AnalysisController;
+use App\Http\Controllers\ImprovementPlanController;
+use App\Http\Controllers\ChatController;
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('dashboard');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::middleware(['auth'])->group(function () {
 
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
+
+    Route::get('/uploads', [UploadController::class, 'index'])
+        ->name('uploads.index');
+    Route::post('/uploads', [UploadController::class, 'store'])
+        ->name('uploads.store');
+    Route::delete('/uploads/{upload}', [UploadController::class, 'destroy'])
+        ->name('uploads.destroy');
+
+    Route::get('/analysis', [AnalysisController::class, 'index'])
+        ->name('analysis.index');
+    Route::post('/analysis/{upload}', [AnalysisController::class, 'generate'])
+        ->name('analysis.generate');
+    Route::get('/analysis/{report}', [AnalysisController::class, 'show'])
+        ->name('analysis.show');
+
+    Route::get('/plans', [ImprovementPlanController::class, 'index'])
+        ->name('plans.index');
+    Route::post('/plans/{report}', [ImprovementPlanController::class, 'generate'])
+        ->name('plans.generate');
+    Route::get('/plans/{plan}', [ImprovementPlanController::class, 'show'])
+        ->name('plans.show');
+    Route::patch('/plans/{plan}', [ImprovementPlanController::class, 'update'])
+        ->name('plans.update');
+
+    Route::get('/chat', [ChatController::class, 'index'])
+        ->name('chat.index');
+    Route::post('/chat', [ChatController::class, 'send'])
+        ->name('chat.send');
+
 });
 
 require __DIR__.'/auth.php';
