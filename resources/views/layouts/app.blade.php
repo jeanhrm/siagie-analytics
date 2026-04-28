@@ -7,8 +7,11 @@
     <title>{{ config('app.name') }} — @yield('title', 'Dashboard')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('build/assets/app-BAwM3Z3o.css') }}">
-    <script src="{{ asset('build/assets/app-BlSGXWar.js') }}" defer></script>
+    @php
+    $manifest = json_decode(file_get_contents(public_path('build/manifest.json')), true);
+    @endphp
+    <link rel="stylesheet" href="/build/{{ $manifest['resources/css/app.css']['file'] }}">
+    <script src="/build/{{ $manifest['resources/js/app.js']['file'] }}" defer></script>
 </head>
 <body class="bg-gray-50 font-sans antialiased">
 
