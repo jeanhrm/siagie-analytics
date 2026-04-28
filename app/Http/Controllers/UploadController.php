@@ -18,6 +18,7 @@ class UploadController extends Controller
         return view('uploads.index', compact('uploads'));
     }
 
+    
     public function store(Request $request)
     {
         $request->validate([
@@ -29,43 +30,32 @@ class UploadController extends Controller
         $file = $request->file('excel_file');
         $filename = time() . '_' . $file->getClientOriginalName();
 
-        // Guardar archivo
-        $path = $file->storeAs('uploads', $filename, 'public');
-
-        // Registrar en BD
-        $upload = Upload::create([
-            'institution_id' => auth()->user()->institution_id,
-            'filename'       => $filename,
-            'original_name'  => $file->getClientOriginalName(),
-            'type'           => $request->type,
-            'academic_year'  => $request->academic_year,
-            'status'         => 'processing',
-        ]);
-
-        // Procesar Excel
+        // Procesar Excel inmediatamente en memoria
         try {
-            $data = Excel::toArray([], storage_path('app/public/uploads/' . $filename));
-            $rows = count($data[0] ?? []) - 1; // sin cabecera
+            $data = Excel::toArray([], $file);
+            $rows = $data[0] ?? [];
+            $totalRows = max(0, count($rows) - 1);
 
-            $upload->update([
-                'status'     => 'done',
-                'total_rows' => max(0, $rows),
+            // Guardar datos procesados en BD
+            $upload = Upload::create([
+                'institution_id' => auth()->user()->institution_id,
+                'filename'       => $filename,
+                'original_name'  => $file->getClientOriginalName(),
+                'type'           => $request->type,
+                'academic_year'  => $request->academic_year,
+                'status'         => 'done',
+                'total_rows'     => $totalRows,
+                'raw_data'       => json_encode($rows),
             ]);
 
             return redirect()->route('uploads.index')
-                ->with('success', "Archivo procesado correctamente. Se encontraron {$rows} registros.");
+                ->with('success', "Archivo procesado correctamente. Se encontraron {$totalRows} registros.");
 
         } catch (\Exception $e) {
-            $upload->update([
-                'status'        => 'error',
-                'error_message' => $e->getMessage(),
-            ]);
-
             return redirect()->route('uploads.index')
                 ->with('error', 'Error al procesar el archivo: ' . $e->getMessage());
         }
     }
-
     public function destroy($id)
     {
         $upload = Upload::where('id', $id)

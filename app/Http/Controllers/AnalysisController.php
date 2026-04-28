@@ -28,11 +28,10 @@ class AnalysisController extends Controller
         abort(403);
         }
 
-        // Leer Excel
-        $data = Excel::toArray([], storage_path('app/public/uploads/' . $upload->filename));
-        $rows = $data[0] ?? [];
+        // Leer datos desde BD
+        $rows = json_decode($upload->raw_data, true);
 
-        if (count($rows) < 2) {
+        if (!$rows || count($rows) < 2) {
             return redirect()->route('uploads.index')
                 ->with('error', 'El archivo no tiene datos suficientes.');
         }

@@ -9,7 +9,7 @@ class Upload extends Model
     protected $fillable = [
         'institution_id', 'filename', 'original_name',
         'type', 'academic_year', 'status',
-        'total_rows', 'error_message'
+        'total_rows', 'error_message','raw_data'
     ];
 
     public function institution() {
