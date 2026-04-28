@@ -4,10 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Upload;
-use App\Models\Student;
-use App\Models\Grade;
 use App\Models\AnalysisReport;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Http;
 
 class AnalysisController extends Controller
@@ -25,51 +22,29 @@ class AnalysisController extends Controller
     public function generate(Upload $upload)
     {
         if ($upload->institution_id !== auth()->user()->institution_id) {
-        abort(403);
+            abort(403);
         }
 
-        // Leer datos desde BD
-        $rows = json_decode($upload->raw_data, true);
+        $rawData = json_decode($upload->raw_data, true);
 
-        if (!$rows || count($rows) < 2) {
+        if (!$rawData) {
             return redirect()->route('uploads.index')
-                ->with('error', 'El archivo no tiene datos suficientes.');
+                ->with('error', 'No hay datos procesados para este archivo.');
         }
 
-        // Procesar datos
-        $headers = array_map('trim', $rows[0]);
-        $records = [];
+        // Parsear estructura SIAGIE
+        $siagieData = $this->parseSiagie($rawData);
 
-        for ($i = 1; $i < count($rows); $i++) {
-            $record = [];
-            foreach ($headers as $j => $header) {
-                $record[$header] = $rows[$i][$j] ?? null;
-            }
-            $records[] = $record;
+        if (empty($siagieData['areas'])) {
+            return redirect()->route('uploads.index')
+                ->with('error', 'No se pudieron extraer datos del archivo SIAGIE.');
         }
 
-        // Calcular métricas básicas
-        $totalStudents = count($records);
-        $summaryData = [
-            'total_students' => $totalStudents,
-            'academic_year'  => $upload->academic_year,
-            'type'           => $upload->type,
-            'headers'        => $headers,
-            'sample_records' => array_slice($records, 0, 5),
-        ];
-
-        // Calcular promedios por columna numérica
-        $numericAverages = [];
-        foreach ($headers as $header) {
-            $values = array_filter(array_column($records, $header), fn($v) => is_numeric($v));
-            if (count($values) > 0) {
-                $numericAverages[$header] = round(array_sum($values) / count($values), 2);
-            }
-        }
-        $summaryData['averages'] = $numericAverages;
+        // Calcular métricas
+        $summaryData = $this->calculateMetrics($siagieData);
 
         // Enviar a Claude
-        $prompt = $this->buildPrompt($upload, $summaryData, $records);
+        $prompt = $this->buildPrompt($upload, $summaryData, $siagieData);
         $aiResponse = $this->callClaude($prompt);
 
         if (!$aiResponse) {
@@ -79,15 +54,15 @@ class AnalysisController extends Controller
 
         // Guardar reporte
         $report = AnalysisReport::create([
-            'institution_id' => auth()->user()->institution_id,
-            'upload_id'      => $upload->id,
-            'academic_year'  => $upload->academic_year,
-            'summary_data'   => $summaryData,
-            'ai_analysis'    => $aiResponse['analysis'],
-            'critical_areas' => $aiResponse['critical_areas'],
-            'strengths'      => $aiResponse['strengths'],
-            'at_risk_students' => $aiResponse['at_risk'],
-            'status'         => 'generated',
+            'institution_id'  => auth()->user()->institution_id,
+            'upload_id'       => $upload->id,
+            'academic_year'   => $upload->academic_year,
+            'summary_data'    => $summaryData,
+            'ai_analysis'     => $aiResponse['analysis'],
+            'critical_areas'  => $aiResponse['critical_areas'],
+            'strengths'       => $aiResponse['strengths'],
+            'at_risk_students'=> $aiResponse['at_risk'],
+            'status'          => 'generated',
         ]);
 
         return redirect()->route('analysis.show', $report)
@@ -104,37 +79,184 @@ class AnalysisController extends Controller
         return view('analysis.show', compact('report'));
     }
 
-    private function buildPrompt($upload, $summaryData, $records)
+    private function parseSiagie($rawData)
     {
-        $sample = json_encode(array_slice($records, 0, 10), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        $averages = json_encode($summaryData['averages'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        // rawData es array de hojas: [nombre_hoja => [[fila1], [fila2], ...]]
+        $areas = [];
+        $students = [];
+        $generalInfo = [];
 
-        return "Eres un experto en análisis educativo del sistema peruano. Analiza los siguientes datos del SIAGIE de una institución educativa.
+        foreach ($rawData as $sheetName => $rows) {
+            if (!is_array($rows) || count($rows) < 3) continue;
 
-TIPO DE ARCHIVO: {$upload->type}
-AÑO ACADÉMICO: {$upload->academic_year}
-TOTAL DE REGISTROS: {$summaryData['total_students']}
-COLUMNAS DEL ARCHIVO: " . implode(', ', $summaryData['headers']) . "
+            // Ignorar hojas de metadatos
+            if (in_array($sheetName, ['Generalidades', 'Parametros'])) {
+                if ($sheetName === 'Generalidades') {
+                    $generalInfo = $this->parseGeneralidades($rows);
+                }
+                continue;
+            }
 
-PROMEDIOS POR ÁREA/COLUMNA NUMÉRICA:
-{$averages}
+            // Es una hoja de área curricular
+            $areaName = $sheetName;
+            $header1 = $rows[0] ?? []; // competencias
+            $header2 = $rows[1] ?? []; // NL / Conclusión
 
-MUESTRA DE DATOS (primeros 10 registros):
-{$sample}
+            // Encontrar columnas NL (nivel de logro)
+            $nlColumns = [];
+            foreach ($header2 as $colIdx => $cellValue) {
+                if ($cellValue === 'NL') {
+                    $competencia = $header1[$colIdx] ?? ('C' . $colIdx);
+                    $nlColumns[$colIdx] = $competencia;
+                }
+            }
 
-Basándote en estos datos, proporciona un análisis educativo completo. Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
+            if (empty($nlColumns)) continue;
+
+            // Leer estudiantes
+            $areaStudents = [];
+            for ($i = 2; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                $nombre = $row[2] ?? null;
+                if (!$nombre || !is_string($nombre)) continue;
+
+                $notas = [];
+                foreach ($nlColumns as $colIdx => $competencia) {
+                    $nota = $row[$colIdx] ?? null;
+                    if ($nota && in_array($nota, ['AD', 'A', 'B', 'C'])) {
+                        $notas["C{$competencia}"] = $nota;
+                    }
+                }
+
+                if (!empty($notas)) {
+                    $areaStudents[] = [
+                        'nombre' => $nombre,
+                        'notas'  => $notas,
+                    ];
+                    $students[$nombre] = $nombre;
+                }
+            }
+
+            // Calcular distribución de notas del área
+            $distribucion = ['AD' => 0, 'A' => 0, 'B' => 0, 'C' => 0];
+            foreach ($areaStudents as $st) {
+                foreach ($st['notas'] as $nota) {
+                    if (isset($distribucion[$nota])) {
+                        $distribucion[$nota]++;
+                    }
+                }
+            }
+
+            $totalNotas = array_sum($distribucion);
+            $areas[$areaName] = [
+                'nombre'       => $areaName,
+                'estudiantes'  => count($areaStudents),
+                'distribucion' => $distribucion,
+                'total_notas'  => $totalNotas,
+                'pct_logro'    => $totalNotas > 0
+                    ? round(($distribucion['AD'] + $distribucion['A']) / $totalNotas * 100, 1)
+                    : 0,
+                'pct_proceso'  => $totalNotas > 0
+                    ? round($distribucion['B'] / $totalNotas * 100, 1)
+                    : 0,
+                'pct_inicio'   => $totalNotas > 0
+                    ? round($distribucion['C'] / $totalNotas * 100, 1)
+                    : 0,
+            ];
+        }
+
+        return [
+            'areas'       => $areas,
+            'total_students' => count($students),
+            'general_info'   => $generalInfo,
+        ];
+    }
+
+    private function parseGeneralidades($rows)
+    {
+        $info = [];
+        foreach ($rows as $row) {
+            foreach ($row as $i => $cell) {
+                if ($cell === 'Nombre :' && isset($row[$i + 1])) {
+                    $info['nombre_ie'] = $row[$i + 1];
+                }
+                if ($cell === 'Año académico :' && isset($row[$i + 1])) {
+                    $info['año'] = $row[$i + 1];
+                }
+                if ($cell === 'Período de evaluación :' && isset($row[$i + 1])) {
+                    $info['periodo'] = $row[$i + 1];
+                }
+                if ($cell === 'Grado :' && isset($row[$i + 1])) {
+                    $info['grado'] = $row[$i + 1];
+                }
+            }
+        }
+        return $info;
+    }
+
+    private function calculateMetrics($siagieData)
+    {
+        $areas = $siagieData['areas'];
+
+        // Ordenar por % de inicio (C) — las más críticas primero
+        uasort($areas, fn($a, $b) => $b['pct_inicio'] <=> $a['pct_inicio']);
+
+        $criticalAreas = array_filter($areas, fn($a) => $a['pct_inicio'] > 30);
+        $strongAreas   = array_filter($areas, fn($a) => $a['pct_logro'] > 60);
+
+        return [
+            'total_students' => $siagieData['total_students'],
+            'total_areas'    => count($areas),
+            'areas'          => $areas,
+            'critical_count' => count($criticalAreas),
+            'strong_count'   => count($strongAreas),
+            'general_info'   => $siagieData['general_info'],
+        ];
+    }
+
+    private function buildPrompt($upload, $summaryData, $siagieData)
+    {
+        $areasResumen = [];
+        foreach ($summaryData['areas'] as $nombre => $area) {
+            $areasResumen[] = "- {$nombre}: AD={$area['distribucion']['AD']}, A={$area['distribucion']['A']}, B={$area['distribucion']['B']}, C={$area['distribucion']['C']} | Logro={$area['pct_logro']}% | Inicio={$area['pct_inicio']}%";
+        }
+        $areasTexto = implode("\n", $areasResumen);
+
+        $info = $summaryData['general_info'];
+        $ie = $info['nombre_ie'] ?? 'IE desconocida';
+        $periodo = $info['periodo'] ?? $upload->academic_year;
+        $grado = $info['grado'] ?? '';
+
+        return "Eres un experto en análisis educativo del sistema peruano (EBR). Analiza los datos SIAGIE de esta institución educativa.
+
+INSTITUCIÓN: {$ie}
+GRADO: {$grado}
+PERÍODO: {$periodo}
+TOTAL ESTUDIANTES: {$summaryData['total_students']}
+TOTAL ÁREAS CURRICULARES: {$summaryData['total_areas']}
+
+ESCALA DE CALIFICACIÓN:
+- AD = Logro destacado
+- A = Logro esperado  
+- B = En proceso
+- C = En inicio (crítico)
+
+RESULTADOS POR ÁREA CURRICULAR:
+{$areasTexto}
+
+Analiza estos datos y responde ÚNICAMENTE en formato JSON con esta estructura exacta:
 {
-    \"analysis\": \"Análisis narrativo completo en 3-4 párrafos sobre el estado educativo de la institución, identificando patrones, tendencias y situación general\",
+    \"analysis\": \"Análisis narrativo completo en 3-4 párrafos sobre el estado educativo, patrones identificados y situación general de la institución\",
     \"critical_areas\": [
-        {\"area\": \"nombre del área o aspecto crítico\", \"description\": \"descripción del problema\", \"severity\": \"alta/media/baja\"}
+        {\"area\": \"nombre del área\", \"description\": \"descripción del problema con datos específicos\", \"severity\": \"alta/media/baja\"}
     ],
     \"strengths\": [
-        {\"area\": \"nombre de la fortaleza\", \"description\": \"descripción de la fortaleza\"}
+        {\"area\": \"nombre del área o aspecto\", \"description\": \"descripción de la fortaleza con datos\"}
     ],
     \"at_risk\": {
-        \"count\": número estimado de estudiantes en riesgo,
+        \"count\": número estimado de estudiantes en inicio,
         \"percentage\": porcentaje estimado,
-        \"main_factors\": [\"factor 1\", \"factor 2\"]
+        \"main_factors\": [\"factor 1\", \"factor 2\", \"factor 3\"]
     }
 }";
     }
@@ -155,10 +277,8 @@ Basándote en estos datos, proporciona un análisis educativo completo. Responde
             ]);
 
             $text = $response->json()['content'][0]['text'] ?? null;
-
             if (!$text) return null;
 
-            // Limpiar JSON
             $text = preg_replace('/```json|```/', '', $text);
             $text = trim($text);
 

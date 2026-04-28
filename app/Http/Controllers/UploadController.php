@@ -18,7 +18,6 @@ class UploadController extends Controller
         return view('uploads.index', compact('uploads'));
     }
 
-    
     public function store(Request $request)
     {
         $request->validate([
@@ -30,13 +29,27 @@ class UploadController extends Controller
         $file = $request->file('excel_file');
         $filename = time() . '_' . $file->getClientOriginalName();
 
-        // Procesar Excel inmediatamente en memoria
         try {
+            // Leer todas las hojas
             $data = Excel::toArray([], $file);
-            $rows = $data[0] ?? [];
-            $totalRows = max(0, count($rows) - 1);
 
-            // Guardar datos procesados en BD
+            // Convertir a array asociativo por nombre de hoja
+            $sheetsData = [];
+            $sheetNames = [];
+
+            // Obtener nombres de hojas usando PhpSpreadsheet
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
+            foreach ($spreadsheet->getSheetNames() as $idx => $name) {
+                $sheetsData[$name] = $data[$idx] ?? [];
+            }
+
+            $totalRows = 0;
+            foreach ($sheetsData as $name => $rows) {
+                if (!in_array($name, ['Generalidades', 'Parametros'])) {
+                    $totalRows += max(0, count($rows) - 2);
+                }
+            }
+
             $upload = Upload::create([
                 'institution_id' => auth()->user()->institution_id,
                 'filename'       => $filename,
@@ -45,17 +58,21 @@ class UploadController extends Controller
                 'academic_year'  => $request->academic_year,
                 'status'         => 'done',
                 'total_rows'     => $totalRows,
-                'raw_data'       => json_encode($rows),
+                'raw_data'       => json_encode($sheetsData),
             ]);
 
             return redirect()->route('uploads.index')
-                ->with('success', "Archivo procesado correctamente. Se encontraron {$totalRows} registros.");
+                ->with('success', "Archivo procesado. {$totalRows} registros en " . count($sheetsData) . " áreas curriculares.");
 
         } catch (\Exception $e) {
             return redirect()->route('uploads.index')
-                ->with('error', 'Error al procesar el archivo: ' . $e->getMessage());
+                ->with('error', 'Error al procesar: ' . $e->getMessage());
         }
     }
+    
+
+
+
     public function destroy($id)
     {
         $upload = Upload::where('id', $id)
