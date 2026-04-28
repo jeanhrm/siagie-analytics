@@ -7,8 +7,8 @@
     <title>{{ config('app.name') }} — @yield('title', 'Dashboard')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
+    <link rel="stylesheet" href="{{ asset('build/assets/app-BAwM3Z3o.css') }}">
+    <script src="{{ asset('build/assets/app-BlSGXWar.js') }}" defer></script>
 </head>
 <body class="bg-gray-50 font-sans antialiased">
 
