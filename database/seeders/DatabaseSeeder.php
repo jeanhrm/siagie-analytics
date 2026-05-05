@@ -11,7 +11,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Solo crea si no existe
         $institution = Institution::firstOrCreate(
             ['code' => '36006'],
             [
@@ -25,13 +24,25 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Solo crea si no existe
+        // Director
         User::firstOrCreate(
-            ['email' => 'admin@siagie.test'],
+            ['email' => 'director@siagie.test'],
             [
-                'name'           => 'Administrador',
+                'name'           => 'Director',
                 'password'       => Hash::make('password'),
                 'institution_id' => $institution->id,
+                'role'           => 'director',
+            ]
+        );
+
+        // Docente
+        User::firstOrCreate(
+            ['email' => 'docente@siagie.test'],
+            [
+                'name'           => 'Docente',
+                'password'       => Hash::make('password'),
+                'institution_id' => $institution->id,
+                'role'           => 'docente',
             ]
         );
     }
