@@ -53,6 +53,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/chat', [ChatController::class, 'send'])
         ->name('chat.send');
 
+    Route::delete('/chat/clear', [ChatController::class, 'clear'])
+    ->name('chat.clear');
+
 });
 
 require __DIR__.'/auth.php';

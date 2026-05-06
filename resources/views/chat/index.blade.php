@@ -2,6 +2,20 @@
 @section('title', 'Asistente IA')
 @section('subtitle', 'Consulta sobre los datos de tu institución')
 
+
+@php
+function formatMessagePHP($text) {
+    $text = e($text);
+    $text = preg_replace('/^### (.+)$/m', '<p class="font-semibold text-gray-900 mt-2 mb-1">$1</p>', $text);
+    $text = preg_replace('/^## (.+)$/m', '<p class="font-bold text-gray-900 mt-2 mb-1">$1</p>', $text);
+    $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
+    $text = preg_replace('/^- (.+)$/m', '<li class="ml-4 list-disc">$1</li>', $text);
+    $text = preg_replace('/\n\n/', '<br><br>', $text);
+    $text = preg_replace('/\n/', '<br>', $text);
+    return $text;
+}
+@endphp
+
 @section('content')
 
 <div class="grid grid-cols-3 gap-6">
@@ -25,10 +39,18 @@
                     <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span class="text-xs text-gray-400">En línea</span>
                 </div>
+                <form action="{{ route('chat.clear') }}" method="POST" class="ml-auto">
+                    @csrf @method('DELETE')
+                    <button type="submit" onclick="return confirm('¿Limpiar historial?')"
+                        class="text-xs text-gray-400 hover:text-red-500 transition-all">
+                        Limpiar historial
+                    </button>
+                </form>
             </div>
 
             {{-- Mensajes --}}
             <div class="flex-1 overflow-y-auto p-5 space-y-4" id="chat-messages">
+                @if($messages->isEmpty())
                 <div class="flex gap-3">
                     <div class="w-7 h-7 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                         <span class="text-xs font-bold text-purple-600">IA</span>
@@ -41,6 +63,20 @@
                         </p>
                     </div>
                 </div>
+                @else
+                @foreach($messages as $msg)
+                <div class="flex gap-3 {{ $msg->role === 'user' ? 'flex-row-reverse' : '' }}">
+                    <div class="w-7 h-7 {{ $msg->role === 'user' ? 'bg-blue-500' : 'bg-purple-100' }} rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                        <span class="text-xs font-bold {{ $msg->role === 'user' ? 'text-white' : 'text-purple-600' }}">
+                            {{ $msg->role === 'user' ? 'TU' : 'IA' }}
+                        </span>
+                    </div>
+                    <div class="{{ $msg->role === 'user' ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'bg-gray-50 text-gray-700 rounded-2xl rounded-tl-sm' }} px-4 py-3 max-w-lg">
+                        <div class="text-sm leading-relaxed">{!! $msg->role === 'assistant' ? formatMessagePHP($msg->content) : e($msg->content) !!}</div>
+                    </div>
+                </div>
+                @endforeach
+                @endif
             </div>
 
             {{-- Sugerencias rápidas --}}
@@ -129,7 +165,10 @@
     </div>
 </div>
 
+
+
 <script>
+    
 let chatHistory = [];
 
 function handleKeyPress(e) {
@@ -161,16 +200,12 @@ function sendMessage() {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
         },
-        body: JSON.stringify({ message, history: chatHistory }),
+        body: JSON.stringify({ message }),
     })
     .then(r => r.json())
     .then(data => {
         removeTyping(typingId);
         appendMessage('assistant', data.response);
-        chatHistory.push({ role: 'user', content: message });
-        chatHistory.push({ role: 'assistant', content: data.response });
-        // Mantener historial corto
-        if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
     })
     .catch(() => {
         removeTyping(typingId);
@@ -242,6 +277,12 @@ function removeTyping(id) {
     const el = document.getElementById(id);
     if (el) el.remove();
 }
+
+
+window.addEventListener('load', () => {
+    const container = document.getElementById('chat-messages');
+    container.scrollTop = container.scrollHeight;
+});
 </script>
 
 @endsection

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\AnalysisReport;
 use App\Models\ImprovementPlan;
+use App\Models\ChatMessage;
 use Illuminate\Support\Facades\Http;
 
 class ChatController extends Controller
@@ -21,22 +22,61 @@ class ChatController extends Controller
             ->take(2)
             ->get();
 
-        return view('chat.index', compact('reports', 'plans'));
+        // Cargar historial de mensajes
+        $messages = ChatMessage::where('user_id', auth()->id())
+            ->latest()
+            ->take(20)
+            ->get()
+            ->reverse()
+            ->values();
+
+        return view('chat.index', compact('reports', 'plans', 'messages'));
     }
 
     public function send(Request $request)
     {
         $request->validate([
-            'message'    => 'required|string|max:1000',
-            'history'    => 'nullable|array',
+            'message' => 'required|string|max:1000',
         ]);
+
+        // Guardar mensaje del usuario
+        ChatMessage::create([
+            'user_id'        => auth()->id(),
+            'institution_id' => auth()->user()->institution_id,
+            'role'           => 'user',
+            'content'        => $request->message,
+        ]);
+
+        // Cargar historial reciente para contexto
+        $history = ChatMessage::where('user_id', auth()->id())
+            ->latest()
+            ->take(20)
+            ->get()
+            ->reverse()
+            ->values()
+            ->map(fn($m) => ['role' => $m->role, 'content' => $m->content])
+            ->toArray();
 
         $context = $this->buildContext();
-        $response = $this->callClaude($request->message, $request->history ?? [], $context);
+        $response = $this->callClaude($request->message, $history, $context);
 
-        return response()->json([
-            'response' => $response ?? 'Lo siento, no pude procesar tu consulta. Intenta de nuevo.',
+        $reply = $response ?? 'Lo siento, no pude procesar tu consulta. Intenta de nuevo.';
+
+        // Guardar respuesta del asistente
+        ChatMessage::create([
+            'user_id'        => auth()->id(),
+            'institution_id' => auth()->user()->institution_id,
+            'role'           => 'assistant',
+            'content'        => $reply,
         ]);
+
+        return response()->json(['response' => $reply]);
+    }
+
+    public function clear()
+    {
+        ChatMessage::where('user_id', auth()->id())->delete();
+        return back()->with('success', 'Historial limpiado.');
     }
 
     private function buildContext()
@@ -83,24 +123,6 @@ class ChatController extends Controller
     private function callClaude($message, $history, $context)
     {
         try {
-            $messages = [];
-
-            // Agregar historial
-            foreach ($history as $msg) {
-                if (isset($msg['role']) && isset($msg['content'])) {
-                    $messages[] = [
-                        'role'    => $msg['role'],
-                        'content' => $msg['content'],
-                    ];
-                }
-            }
-
-            // Agregar mensaje actual
-            $messages[] = [
-                'role'    => 'user',
-                'content' => $message,
-            ];
-
             $response = Http::withHeaders([
                 'x-api-key'         => config('services.anthropic.key'),
                 'anthropic-version' => '2023-06-01',
@@ -109,7 +131,7 @@ class ChatController extends Controller
                 'model'      => 'claude-haiku-4-5',
                 'max_tokens' => 1000,
                 'system'     => $context,
-                'messages'   => $messages,
+                'messages'   => $history,
             ]);
 
             return $response->json()['content'][0]['text'] ?? null;
