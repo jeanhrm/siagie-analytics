@@ -19,6 +19,28 @@ class AnalysisController extends Controller
         return view('analysis.index', compact('reports'));
     }
 
+    public function institutional()
+    {
+        // Solo directores
+        if (!auth()->user()->isDirector()) {
+            abort(403);
+        }
+
+        $uploads = \App\Models\Upload::where('institution_id', auth()->user()->institution_id)
+            ->where('status', 'done')
+            ->latest()
+            ->get();
+
+        $reports = AnalysisReport::where('institution_id', auth()->user()->institution_id)
+            ->where('type', 'institutional')
+            ->with('upload')
+            ->latest()
+            ->get();
+
+        return view('analysis.institutional', compact('uploads', 'reports'));
+    }
+
+
     public function generate(Upload $upload)
     {
         if ($upload->institution_id !== auth()->user()->institution_id) {

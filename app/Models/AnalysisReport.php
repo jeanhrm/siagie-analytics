@@ -9,7 +9,7 @@ class AnalysisReport extends Model
     protected $fillable = [
         'institution_id', 'upload_id', 'academic_year',
         'summary_data', 'ai_analysis', 'critical_areas',
-        'strengths', 'at_risk_students', 'status'
+        'strengths', 'at_risk_students', 'status', 'type'
     ];
 
     protected $casts = [
