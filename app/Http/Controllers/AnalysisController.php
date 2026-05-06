@@ -40,6 +40,161 @@ class AnalysisController extends Controller
         return view('analysis.institutional', compact('uploads', 'reports'));
     }
 
+    public function generateInstitutional(Request $request)
+{
+    if (!auth()->user()->isDirector()) {
+        abort(403);
+    }
+
+    $request->validate([
+        'upload_ids'   => 'required|array|min:1',
+        'academic_year'=> 'required|string',
+        'context'      => 'required|string',
+    ]);
+
+    // Cargar todos los uploads seleccionados
+    $uploads = \App\Models\Upload::whereIn('id', $request->upload_ids)
+        ->where('institution_id', auth()->user()->institution_id)
+        ->where('status', 'done')
+        ->get();
+
+    if ($uploads->isEmpty()) {
+        return redirect()->route('analysis.institutional')
+            ->with('error', 'No se encontraron archivos válidos.');
+    }
+
+    // Consolidar datos de todos los salones
+    $allAreas = [];
+    $totalStudents = 0;
+    $salones = [];
+
+    foreach ($uploads as $upload) {
+        $rawData = json_decode($upload->raw_data, true);
+        if (!$rawData) continue;
+
+        $siagieData = $this->parseSiagie($rawData);
+        $totalStudents += $siagieData['total_students'];
+        $salones[] = $upload->original_name;
+
+        // Consolidar áreas
+        foreach ($siagieData['areas'] as $areaName => $areaData) {
+            if (!isset($allAreas[$areaName])) {
+                $allAreas[$areaName] = [
+                    'nombre'       => $areaName,
+                    'estudiantes'  => 0,
+                    'distribucion' => ['AD' => 0, 'A' => 0, 'B' => 0, 'C' => 0],
+                    'total_notas'  => 0,
+                ];
+            }
+            $allAreas[$areaName]['estudiantes']  += $areaData['estudiantes'];
+            $allAreas[$areaName]['total_notas']  += $areaData['total_notas'];
+            foreach (['AD', 'A', 'B', 'C'] as $nivel) {
+                $allAreas[$areaName]['distribucion'][$nivel] += $areaData['distribucion'][$nivel];
+            }
+        }
+    }
+
+    // Calcular porcentajes consolidados
+    foreach ($allAreas as &$area) {
+        $total = $area['total_notas'];
+        $area['pct_logro']   = $total > 0 ? round(($area['distribucion']['AD'] + $area['distribucion']['A']) / $total * 100, 1) : 0;
+        $area['pct_proceso'] = $total > 0 ? round($area['distribucion']['B'] / $total * 100, 1) : 0;
+        $area['pct_inicio']  = $total > 0 ? round($area['distribucion']['C'] / $total * 100, 1) : 0;
+    }
+
+    // Ordenar por más críticas
+    uasort($allAreas, fn($a, $b) => $b['pct_inicio'] <=> $a['pct_inicio']);
+
+    $summaryData = [
+        'total_students' => $totalStudents,
+        'total_areas'    => count($allAreas),
+        'areas'          => $allAreas,
+        'salones'        => $salones,
+        'context'        => $request->context,
+        'critical_count' => count(array_filter($allAreas, fn($a) => $a['pct_inicio'] > 30)),
+        'strong_count'   => count(array_filter($allAreas, fn($a) => $a['pct_logro'] > 60)),
+        'general_info'   => [],
+    ];
+
+    // Construir prompt institucional
+    $prompt = $this->buildInstitutionalPrompt($summaryData, $request->context, $request->academic_year);
+    $aiResponse = $this->callClaude($prompt);
+
+    if (!$aiResponse) {
+        return redirect()->route('analysis.institutional')
+            ->with('error', 'Error al conectar con la IA. Verifica tu API Key.');
+    }
+
+    $report = AnalysisReport::create([
+        'institution_id'   => auth()->user()->institution_id,
+        'upload_id'        => $uploads->first()->id,
+        'academic_year'    => $request->academic_year,
+        'summary_data'     => $summaryData,
+        'ai_analysis'      => $aiResponse['analysis'],
+        'critical_areas'   => $aiResponse['critical_areas'],
+        'strengths'        => $aiResponse['strengths'],
+        'at_risk_students' => $aiResponse['at_risk'],
+        'status'           => 'generated',
+        'type'             => 'institutional',
+    ]);
+
+    return redirect()->route('analysis.show', $report)
+        ->with('success', 'Análisis institucional generado correctamente.');
+}
+
+    private function buildInstitutionalPrompt($summaryData, $context, $academicYear)
+    {
+        $contextMap = [
+            'rural_secundaria'  => 'escuela rural de nivel secundaria',
+            'rural_primaria'    => 'escuela rural de nivel primaria',
+            'urbana_secundaria' => 'escuela urbana de nivel secundaria',
+            'urbana_primaria'   => 'escuela urbana de nivel primaria',
+        ];
+        $contextTexto = $contextMap[$context] ?? $context;
+
+        $areasResumen = [];
+        foreach ($summaryData['areas'] as $nombre => $area) {
+            $areasResumen[] = "- {$nombre}: AD={$area['distribucion']['AD']}, A={$area['distribucion']['A']}, B={$area['distribucion']['B']}, C={$area['distribucion']['C']} | Logro={$area['pct_logro']}% | Inicio={$area['pct_inicio']}%";
+        }
+        $areasTexto = implode("\n", $areasResumen);
+        $salonesTexto = implode(', ', $summaryData['salones']);
+
+        return "Eres un experto en análisis educativo del sistema peruano (EBR). Analiza los datos consolidados de una {$contextTexto} ubicada en Huancavelica, Perú.
+
+    AÑO ACADÉMICO: {$academicYear}
+    CONTEXTO: {$contextTexto}
+    TOTAL ESTUDIANTES: {$summaryData['total_students']}
+    SALONES ANALIZADOS: {$salonesTexto}
+    TOTAL ÁREAS CURRICULARES: {$summaryData['total_areas']}
+
+    ESCALA DE CALIFICACIÓN CNEB:
+    - AD = Logro destacado
+    - A = Logro esperado
+    - B = En proceso
+    - C = En inicio (crítico)
+
+    RESULTADOS CONSOLIDADOS POR ÁREA CURRICULAR:
+    {$areasTexto}
+
+    Considera el contexto rural andino de Huancavelica al formular recomendaciones — limitaciones de conectividad, contexto socioeconómico, lengua materna quechua, calendario agrofestivo y recursos disponibles.
+
+    Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
+    {
+        \"analysis\": \"Análisis narrativo institucional completo en 4-5 párrafos considerando el contexto rural/urbano de la institución\",
+        \"critical_areas\": [
+            {\"area\": \"nombre del área\", \"description\": \"descripción con datos específicos y recomendación contextualizada\", \"severity\": \"alta/media/baja\"}
+        ],
+        \"strengths\": [
+            {\"area\": \"nombre del área o aspecto\", \"description\": \"descripción de la fortaleza con datos\"}
+        ],
+        \"at_risk\": {
+            \"count\": número estimado de estudiantes en inicio,
+            \"percentage\": porcentaje estimado,
+            \"main_factors\": [\"factor contextualizado 1\", \"factor 2\", \"factor 3\"]
+        }
+    }";
+    }
+
 
     public function generate(Upload $upload)
     {
@@ -85,6 +240,7 @@ class AnalysisController extends Controller
             'strengths'       => $aiResponse['strengths'],
             'at_risk_students'=> $aiResponse['at_risk'],
             'status'          => 'generated',
+            'type'            => 'aula',
         ]);
 
         return redirect()->route('analysis.show', $report)
