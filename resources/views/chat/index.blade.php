@@ -178,6 +178,25 @@ function sendMessage() {
     });
 }
 
+function formatMessage(text) {
+    return text
+        // Headers
+        .replace(/^### (.+)$/gm, '<p class="font-semibold text-gray-900 mt-3 mb-1">$1</p>')
+        .replace(/^## (.+)$/gm, '<p class="font-bold text-gray-900 mt-3 mb-1">$1</p>')
+        .replace(/^# (.+)$/gm, '<p class="font-bold text-gray-900 text-base mt-3 mb-1">$1</p>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Listas
+        .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$2</li>')
+        // Saltos de línea
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+}
+
+
 function appendMessage(role, content) {
     const container = document.getElementById('chat-messages');
     const isUser = role === 'user';
@@ -189,7 +208,7 @@ function appendMessage(role, content) {
             <span class="text-xs font-bold ${isUser ? 'text-white' : 'text-purple-600'}">${isUser ? 'TU' : 'IA'}</span>
         </div>
         <div class="${isUser ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'bg-gray-50 text-gray-700 rounded-2xl rounded-tl-sm'} px-4 py-3 max-w-lg">
-            <p class="text-sm leading-relaxed whitespace-pre-line">${content}</p>
+            <div class="text-sm leading-relaxed prose-sm">${formatMessage(content)}</div>
         </div>
     `;
     container.appendChild(div);
