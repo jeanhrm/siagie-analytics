@@ -23,15 +23,18 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/uploads/{upload}', [UploadController::class, 'destroy'])
         ->name('uploads.destroy');
 
+    // Rutas de análisis — las específicas PRIMERO
     Route::get('/analysis', [AnalysisController::class, 'index'])
         ->name('analysis.index');
+
+    Route::get('/analysis/institutional', [AnalysisController::class, 'institutional'])
+        ->name('analysis.institutional');
+
     Route::post('/analysis/{upload}', [AnalysisController::class, 'generate'])
         ->name('analysis.generate');
+
     Route::get('/analysis/{report}', [AnalysisController::class, 'show'])
         ->name('analysis.show');
-    Route::get('/analysis/institutional', [AnalysisController::class, 'institutional'])
-        ->name('analysis.institutional')
-        ->middleware('role:director');
     
 
 
