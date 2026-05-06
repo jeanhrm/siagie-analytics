@@ -29,6 +29,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('analysis.generate');
     Route::get('/analysis/{report}', [AnalysisController::class, 'show'])
         ->name('analysis.show');
+    Route::get('/analysis/institutional', [AnalysisController::class, 'institutional'])
+        ->name('analysis.institutional')
+        ->middleware('role:director');
+    
+
 
     Route::get('/plans', [ImprovementPlanController::class, 'index'])
         ->name('plans.index');
