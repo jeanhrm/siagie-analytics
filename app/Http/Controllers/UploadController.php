@@ -12,8 +12,9 @@ class UploadController extends Controller
     public function index()
     {
         $uploads = Upload::where('institution_id', auth()->user()->institution_id)
-            ->latest()
-            ->get();
+        ->with('analysisReport')
+        ->latest()
+        ->get();
 
         return view('uploads.index', compact('uploads'));
     }
