@@ -6,6 +6,7 @@ use App\Http\Controllers\UploadController;
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\ImprovementPlanController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -55,6 +56,15 @@ Route::middleware(['auth'])->group(function () {
 
     Route::delete('/chat/clear', [ChatController::class, 'clear'])
     ->name('chat.clear');
+
+    // Rutas de administración
+    Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/', [AdminController::class, 'index'])->name('index');
+    Route::post('/users', [AdminController::class, 'createUser'])->name('users.create');
+    Route::delete('/users/{id}', [AdminController::class, 'deleteUser'])->name('users.delete');
+    Route::post('/institutions', [AdminController::class, 'createInstitution'])->name('institutions.create');
+});
+
 
 });
 

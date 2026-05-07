@@ -29,6 +29,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
     public function institution() {
     return $this->belongsTo(\App\Models\Institution::class);
     }

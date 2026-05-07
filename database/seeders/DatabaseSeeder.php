@@ -24,6 +24,17 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // Admin (tú)
+        User::firstOrCreate(
+            ['email' => 'admin@quipubit.com'],
+            [
+                'name'     => 'Jean Admin',
+                'password' => Hash::make('jcoa2026'),
+                'role'     => 'admin',
+                'institution_id' => null,
+            ]
+        );
+
         // Director
         User::firstOrCreate(
             ['email' => 'director@siagie.test'],
