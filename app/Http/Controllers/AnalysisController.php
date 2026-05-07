@@ -537,4 +537,24 @@ class AnalysisController extends Controller
             return null;
         }
     }
+
+    public function exportPdf($reportId)
+    {
+        $report = AnalysisReport::where('id', $reportId)
+            ->where('institution_id', auth()->user()->institution_id)
+            ->with('upload')
+            ->firstOrFail();
+
+        $institution = auth()->user()->institution;
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('analysis.pdf', compact('report', 'institution'))
+            ->setPaper('a4', 'portrait');
+
+        $filename = 'analisis-' . str_replace(' ', '-', strtolower($institution->name)) . '-' . $report->academic_year . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
+
+
 }

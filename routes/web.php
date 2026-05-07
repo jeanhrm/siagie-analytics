@@ -40,6 +40,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/analysis/{report}', [AnalysisController::class, 'show'])
         ->name('analysis.show');
 
+    Route::get('/analysis/{report}/pdf', [AnalysisController::class, 'exportPdf'])
+    ->name('analysis.pdf');
+    
+    
     Route::get('/plans', [ImprovementPlanController::class, 'index'])
         ->name('plans.index');
     Route::post('/plans/{report}', [ImprovementPlanController::class, 'generate'])
