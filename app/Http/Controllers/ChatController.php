@@ -12,6 +12,11 @@ class ChatController extends Controller
 {
     public function index()
     {
+
+        if (auth()->user()->isAdmin()) {
+        return redirect()->route('admin.index');
+        }
+
         $reports = AnalysisReport::where('institution_id', auth()->user()->institution_id)
             ->latest()
             ->take(3)

@@ -58,7 +58,7 @@ function formatMessagePHP($text) {
                     <div class="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg">
                         <p class="text-sm text-gray-700 leading-relaxed">
                             Hola, soy tu asistente educativo. Tengo acceso al contexto de
-                            <strong>{{ auth()->user()->institution->name }}</strong>
+                            <strong>{{ auth()->user()->institution->name ?? 'tu institución' }}</strong>
                             y sus análisis recientes. ¿En qué te puedo ayudar?
                         </p>
                     </div>

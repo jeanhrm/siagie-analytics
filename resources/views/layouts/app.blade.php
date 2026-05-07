@@ -102,15 +102,20 @@
                     Plan de Mejora
                 </a>
 
-                <a href="{{ route('chat.index') }}"
-                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                {{ request()->routeIs('chat.*') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-                    </svg>
-                    Asistente IA
-                    <span class="ml-auto text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-medium">IA</span>
-                </a>
+                @if(!auth()->user()->isAdmin())
+                    <a href="{{ route('chat.index') }}"
+                    class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
+                    {{ request()->routeIs('chat.*') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                        </svg>
+                        Asistente IA
+                        <span class="ml-auto text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-medium">IA</span>
+                    </a>
+                    @endif
+
+
+
             @if(auth()->user()->isAdmin())
                 <a href="{{ route('admin.index') }}"
                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all

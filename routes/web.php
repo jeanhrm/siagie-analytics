@@ -50,7 +50,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('plans.update');
 
     Route::get('/chat', [ChatController::class, 'index'])
-        ->name('chat.index');
+        ->name('chat.index')
+        ->middleware('role:docente,director');
     Route::post('/chat', [ChatController::class, 'send'])
         ->name('chat.send');
 
