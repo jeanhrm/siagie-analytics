@@ -11,16 +11,14 @@ class AdminController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(function ($request, $next) {
-            if (!auth()->user()->isAdmin()) {
-                abort(403);
-            }
-            return $next($request);
-        });
+        //
     }
 
     public function index()
     {
+        if (!auth()->user()->isAdmin()) {
+        abort(403);
+        }
         $users        = User::with('institution')->where('role', '!=', 'admin')->latest()->get();
         $institutions = Institution::withCount('uploads')->latest()->get();
 
@@ -29,6 +27,9 @@ class AdminController extends Controller
 
     public function createUser(Request $request)
     {
+        if (!auth()->user()->isAdmin()) {
+            abort(403);
+        }
         $request->validate([
             'name'           => 'required|string|max:255',
             'email'          => 'required|email|unique:users',
@@ -61,6 +62,10 @@ class AdminController extends Controller
 
     public function createInstitution(Request $request)
     {
+        if (!auth()->user()->isAdmin()) {
+            abort(403);
+        }
+        
         $request->validate([
             'name'     => 'required|string|max:255',
             'code'     => 'required|string|unique:institutions',
