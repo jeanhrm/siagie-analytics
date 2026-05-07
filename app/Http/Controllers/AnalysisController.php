@@ -154,7 +154,15 @@ class AnalysisController extends Controller
 
         $areasResumen = [];
         foreach ($summaryData['areas'] as $nombre => $area) {
-            $areasResumen[] = "- {$nombre}: AD={$area['distribucion']['AD']}, A={$area['distribucion']['A']}, B={$area['distribucion']['B']}, C={$area['distribucion']['C']} | Logro={$area['pct_logro']}% | Inicio={$area['pct_inicio']}%";
+            $areasResumen[] = "\n📚 ÁREA: {$nombre}";
+            $areasResumen[] = "  Global → Logro: {$area['pct_logro']}% | Proceso: {$area['pct_proceso']}% | Inicio: {$area['pct_inicio']}%";
+
+            if (!empty($area['distribucion_por_competencia'])) {
+                foreach ($area['distribucion_por_competencia'] as $comp) {
+                    $areasResumen[] = "  · [{$comp['code']}] {$comp['name']}";
+                    $areasResumen[] = "    AD={$comp['distribucion']['AD']} A={$comp['distribucion']['A']} B={$comp['distribucion']['B']} C={$comp['distribucion']['C']} | Logro={$comp['pct_logro']}% Inicio={$comp['pct_inicio']}%";
+                }
+            }
         }
         $areasTexto = implode("\n", $areasResumen);
         $salonesTexto = implode(', ', $summaryData['salones']);
@@ -259,7 +267,6 @@ class AnalysisController extends Controller
 
     private function parseSiagie($rawData)
     {
-        // rawData es array de hojas: [nombre_hoja => [[fila1], [fila2], ...]]
         $areas = [];
         $students = [];
         $generalInfo = [];
@@ -267,7 +274,6 @@ class AnalysisController extends Controller
         foreach ($rawData as $sheetName => $rows) {
             if (!is_array($rows) || count($rows) < 3) continue;
 
-            // Ignorar hojas de metadatos
             if (in_array($sheetName, ['Generalidades', 'Parametros'])) {
                 if ($sheetName === 'Generalidades') {
                     $generalInfo = $this->parseGeneralidades($rows);
@@ -275,17 +281,22 @@ class AnalysisController extends Controller
                 continue;
             }
 
-            // Es una hoja de área curricular
-            $areaName = $sheetName;
-            $header1 = $rows[0] ?? []; // competencias
-            $header2 = $rows[1] ?? []; // NL / Conclusión
+            $header1 = $rows[0] ?? [];
+            $header2 = $rows[1] ?? [];
 
-            // Encontrar columnas NL (nivel de logro)
+            // Extraer competencias de la leyenda al final de la hoja
+            $competencias = $this->extractCompetencias($rows);
+
+            // Encontrar columnas NL
             $nlColumns = [];
             foreach ($header2 as $colIdx => $cellValue) {
                 if ($cellValue === 'NL') {
-                    $competencia = $header1[$colIdx] ?? ('C' . $colIdx);
-                    $nlColumns[$colIdx] = $competencia;
+                    $compCode = $header1[$colIdx] ?? ('C' . $colIdx);
+                    $compName = $competencias[$compCode] ?? "Competencia {$compCode}";
+                    $nlColumns[$colIdx] = [
+                        'code' => $compCode,
+                        'name' => $compName,
+                    ];
                 }
             }
 
@@ -299,10 +310,10 @@ class AnalysisController extends Controller
                 if (!$nombre || !is_string($nombre)) continue;
 
                 $notas = [];
-                foreach ($nlColumns as $colIdx => $competencia) {
+                foreach ($nlColumns as $colIdx => $compData) {
                     $nota = $row[$colIdx] ?? null;
                     if ($nota && in_array($nota, ['AD', 'A', 'B', 'C'])) {
-                        $notas["C{$competencia}"] = $nota;
+                        $notas[$compData['code']] = $nota;
                     }
                 }
 
@@ -315,39 +326,72 @@ class AnalysisController extends Controller
                 }
             }
 
-            // Calcular distribución de notas del área
-            $distribucion = ['AD' => 0, 'A' => 0, 'B' => 0, 'C' => 0];
+            // Calcular distribución global del área
+            $distribucionTotal = ['AD' => 0, 'A' => 0, 'B' => 0, 'C' => 0];
+
+            // Calcular distribución por competencia
+            $distribucionPorComp = [];
+            foreach ($nlColumns as $colIdx => $compData) {
+                $distribucionPorComp[$compData['code']] = [
+                    'code'         => $compData['code'],
+                    'name'         => $compData['name'],
+                    'distribucion' => ['AD' => 0, 'A' => 0, 'B' => 0, 'C' => 0],
+                    'total'        => 0,
+                ];
+            }
+
             foreach ($areaStudents as $st) {
-                foreach ($st['notas'] as $nota) {
-                    if (isset($distribucion[$nota])) {
-                        $distribucion[$nota]++;
+                foreach ($st['notas'] as $compCode => $nota) {
+                    if (isset($distribucionTotal[$nota])) {
+                        $distribucionTotal[$nota]++;
+                    }
+                    if (isset($distribucionPorComp[$compCode]['distribucion'][$nota])) {
+                        $distribucionPorComp[$compCode]['distribucion'][$nota]++;
+                        $distribucionPorComp[$compCode]['total']++;
                     }
                 }
             }
 
-            $totalNotas = array_sum($distribucion);
-            $areas[$areaName] = [
-                'nombre'       => $areaName,
-                'estudiantes'  => count($areaStudents),
-                'distribucion' => $distribucion,
-                'total_notas'  => $totalNotas,
-                'pct_logro'    => $totalNotas > 0
-                    ? round(($distribucion['AD'] + $distribucion['A']) / $totalNotas * 100, 1)
-                    : 0,
-                'pct_proceso'  => $totalNotas > 0
-                    ? round($distribucion['B'] / $totalNotas * 100, 1)
-                    : 0,
-                'pct_inicio'   => $totalNotas > 0
-                    ? round($distribucion['C'] / $totalNotas * 100, 1)
-                    : 0,
+            // Calcular porcentajes por competencia
+            foreach ($distribucionPorComp as &$comp) {
+                $total = $comp['total'];
+                $comp['pct_logro']   = $total > 0 ? round(($comp['distribucion']['AD'] + $comp['distribucion']['A']) / $total * 100, 1) : 0;
+                $comp['pct_proceso'] = $total > 0 ? round($comp['distribucion']['B'] / $total * 100, 1) : 0;
+                $comp['pct_inicio']  = $total > 0 ? round($comp['distribucion']['C'] / $total * 100, 1) : 0;
+            }
+
+            $totalNotas = array_sum($distribucionTotal);
+            $areas[$sheetName] = [
+                'nombre'              => $sheetName,
+                'competencias_names'  => $competencias,
+                'estudiantes'         => count($areaStudents),
+                'distribucion'        => $distribucionTotal,
+                'distribucion_por_competencia' => $distribucionPorComp,
+                'total_notas'         => $totalNotas,
+                'pct_logro'           => $totalNotas > 0 ? round(($distribucionTotal['AD'] + $distribucionTotal['A']) / $totalNotas * 100, 1) : 0,
+                'pct_proceso'         => $totalNotas > 0 ? round($distribucionTotal['B'] / $totalNotas * 100, 1) : 0,
+                'pct_inicio'          => $totalNotas > 0 ? round($distribucionTotal['C'] / $totalNotas * 100, 1) : 0,
             ];
         }
 
         return [
-            'areas'       => $areas,
+            'areas'          => $areas,
             'total_students' => count($students),
             'general_info'   => $generalInfo,
         ];
+    }
+
+    private function extractCompetencias($rows)
+    {
+        $competencias = [];
+        foreach ($rows as $row) {
+            if (!isset($row[1]) || !is_string($row[1])) continue;
+            // Buscar patrón "01 = Nombre de competencia"
+            if (preg_match('/^(\d{2})\s*=\s*(.+)$/', trim($row[1]), $matches)) {
+                $competencias[$matches[1]] = trim($matches[2]);
+            }
+        }
+        return $competencias;
     }
 
     private function parseGeneralidades($rows)
@@ -396,47 +440,65 @@ class AnalysisController extends Controller
     {
         $areasResumen = [];
         foreach ($summaryData['areas'] as $nombre => $area) {
-            $areasResumen[] = "- {$nombre}: AD={$area['distribucion']['AD']}, A={$area['distribucion']['A']}, B={$area['distribucion']['B']}, C={$area['distribucion']['C']} | Logro={$area['pct_logro']}% | Inicio={$area['pct_inicio']}%";
+            $areasResumen[] = "\n📚 ÁREA: {$nombre}";
+            $areasResumen[] = "  Global → Logro: {$area['pct_logro']}% | Proceso: {$area['pct_proceso']}% | Inicio: {$area['pct_inicio']}%";
+
+            if (!empty($area['distribucion_por_competencia'])) {
+                foreach ($area['distribucion_por_competencia'] as $comp) {
+                    $areasResumen[] = "  · [{$comp['code']}] {$comp['name']}";
+                    $areasResumen[] = "    AD={$comp['distribucion']['AD']} A={$comp['distribucion']['A']} B={$comp['distribucion']['B']} C={$comp['distribucion']['C']} | Logro={$comp['pct_logro']}% Inicio={$comp['pct_inicio']}%";
+                }
+            }
         }
         $areasTexto = implode("\n", $areasResumen);
 
         $info = $summaryData['general_info'];
-        $ie = $info['nombre_ie'] ?? 'IE desconocida';
+        $ie     = $info['nombre_ie'] ?? 'IE desconocida';
         $periodo = $info['periodo'] ?? $upload->academic_year;
-        $grado = $info['grado'] ?? '';
+        $grado  = $info['grado'] ?? '';
 
-        return "Eres un experto en análisis educativo del sistema peruano (EBR). Analiza los datos SIAGIE de esta institución educativa.
+        return "Eres un experto en análisis educativo del sistema peruano (EBR) y en el Currículo Nacional (CNEB). Analiza los datos SIAGIE de esta institución.
 
-INSTITUCIÓN: {$ie}
-GRADO: {$grado}
-PERÍODO: {$periodo}
-TOTAL ESTUDIANTES: {$summaryData['total_students']}
-TOTAL ÁREAS CURRICULARES: {$summaryData['total_areas']}
+    INSTITUCIÓN: {$ie}
+    GRADO: {$grado}
+    PERÍODO: {$periodo}
+    TOTAL ESTUDIANTES: {$summaryData['total_students']}
 
-ESCALA DE CALIFICACIÓN:
-- AD = Logro destacado
-- A = Logro esperado  
-- B = En proceso
-- C = En inicio (crítico)
+    ESCALA CNEB:
+    - AD = Logro destacado
+    - A = Logro esperado
+    - B = En proceso
+    - C = En inicio (crítico)
 
-RESULTADOS POR ÁREA CURRICULAR:
-{$areasTexto}
+    RESULTADOS POR ÁREA Y COMPETENCIA:
+    {$areasTexto}
 
-Analiza estos datos y responde ÚNICAMENTE en formato JSON con esta estructura exacta:
-{
-    \"analysis\": \"Análisis narrativo completo en 3-4 párrafos sobre el estado educativo, patrones identificados y situación general de la institución\",
-    \"critical_areas\": [
-        {\"area\": \"nombre del área\", \"description\": \"descripción del problema con datos específicos\", \"severity\": \"alta/media/baja\"}
-    ],
-    \"strengths\": [
-        {\"area\": \"nombre del área o aspecto\", \"description\": \"descripción de la fortaleza con datos\"}
-    ],
-    \"at_risk\": {
-        \"count\": número estimado de estudiantes en inicio,
-        \"percentage\": porcentaje estimado,
-        \"main_factors\": [\"factor 1\", \"factor 2\", \"factor 3\"]
-    }
-}";
+    INSTRUCCIÓN PEDAGÓGICA IMPORTANTE:
+    Analiza las competencias de forma HOLÍSTICA por área — no como elementos aislados. Identifica patrones transversales entre competencias del mismo campo. Cuando una competencia está crítica, analiza cómo afecta al desarrollo integral del área.
+
+    Responde ÚNICAMENTE en formato JSON con esta estructura:
+    {
+        \"analysis\": \"Análisis narrativo holístico en 3-4 párrafos. Para cada área crítica menciona qué competencias específicas concentran la dificultad y cómo se relacionan entre sí. Usa los nombres reales de las competencias del CNEB.\",
+        \"critical_areas\": [
+            {
+                \"area\": \"nombre del área\",
+                \"description\": \"descripción holística del problema mencionando competencias específicas con sus nombres reales\",
+                \"severity\": \"alta/media/baja\",
+                \"competencias_criticas\": [\"nombre competencia 1\", \"nombre competencia 2\"]
+            }
+        ],
+        \"strengths\": [
+            {
+                \"area\": \"nombre del área o aspecto\",
+                \"description\": \"descripción con datos y competencias destacadas\"
+            }
+        ],
+        \"at_risk\": {
+            \"count\": número estimado,
+            \"percentage\": porcentaje,
+            \"main_factors\": [\"factor 1\", \"factor 2\", \"factor 3\"]
+        }
+    }";
     }
 
     private function callClaude($prompt)
