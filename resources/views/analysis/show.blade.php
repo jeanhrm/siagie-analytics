@@ -1,6 +1,8 @@
 @extends('layouts.app')
 @section('title', 'Análisis IA')
-@section('subtitle', 'Resultados del análisis — ' . $report->upload->original_name)
+@section('subtitle', $report->type === 'institutional' 
+    ? 'Análisis Institucional — ' . ($report->summary_data['general_info']['nombre_ie'] ?? auth()->user()->institution->name)
+    : 'Análisis de Aula — ' . $report->upload->original_name)
 
 @section('content')
 
