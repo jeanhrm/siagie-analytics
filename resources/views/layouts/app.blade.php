@@ -102,7 +102,7 @@
                     Plan de Mejora
                 </a>
 
-                @if(!auth()->user()->isAdmin())
+                @if(auth()->user()->isDirector())
                     <a href="{{ route('chat.index') }}"
                     class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
                     {{ request()->routeIs('chat.*') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">

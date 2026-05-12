@@ -13,9 +13,9 @@ class ChatController extends Controller
     public function index()
     {
 
-        if (auth()->user()->isAdmin()) {
-        return redirect()->route('admin.index');
-        }
+        if (!auth()->user()->isDirector()) {
+        abort(403, 'Solo los directores pueden acceder al asistente IA.');
+    }
 
         $reports = AnalysisReport::where('institution_id', auth()->user()->institution_id)
             ->latest()
@@ -40,6 +40,10 @@ class ChatController extends Controller
 
     public function send(Request $request)
     {
+        
+        if (!auth()->user()->isDirector()) {
+        abort(403);
+    }
         $request->validate([
             'message' => 'required|string|max:1000',
         ]);
@@ -80,6 +84,9 @@ class ChatController extends Controller
 
     public function clear()
     {
+        if (!auth()->user()->isDirector()) {
+        abort(403);
+        }
         ChatMessage::where('user_id', auth()->id())->delete();
         return back()->with('success', 'Historial limpiado.');
     }
