@@ -255,7 +255,10 @@ class AnalysisController extends Controller
             'ai_analysis'     => $aiResponse['analysis'],
             'critical_areas'  => $aiResponse['critical_areas'],
             'strengths'       => $aiResponse['strengths'],
-            'at_risk_students'=> $aiResponse['at_risk'],
+            'at_risk_students' => array_merge(
+                $aiResponse['at_risk'] ?? [],
+                ['students_list' => array_slice($summaryData['at_risk_students'], 0, 20)]
+            ),
             'status'          => 'generated',
             'type'            => 'aula',
         ]);
@@ -331,7 +334,9 @@ class AnalysisController extends Controller
                         'nombre' => $nombre,
                         'notas'  => $notas,
                     ];
-                    $students[$nombre] = $nombre;
+                    $students[$nombre] = isset($students[$nombre])
+                        ? array_merge($students[$nombre], [$sheetName => $notas])
+                        : [$sheetName => $notas];
                 }
             }
 
@@ -383,11 +388,37 @@ class AnalysisController extends Controller
             ];
         }
 
+        // Identificar estudiantes en riesgo (tienen C en al menos 2 áreas)
+        $atRiskStudents = [];
+        foreach ($students as $nombre => $areasNotas) {
+            $areasEnInicio = [];
+            foreach ($areasNotas as $area => $notas) {
+                $tieneC = in_array('C', array_values($notas));
+                if ($tieneC) {
+                    $areasEnInicio[] = $area;
+                }
+            }
+            if (count($areasEnInicio) >= 2) {
+                $atRiskStudents[] = [
+                    'nombre'           => $nombre,
+                    'areas_en_inicio'  => $areasEnInicio,
+                    'total_areas_c'    => count($areasEnInicio),
+                ];
+            }
+        }
+
+        // Ordenar por más áreas en inicio
+        usort($atRiskStudents, fn($a, $b) => $b['total_areas_c'] <=> $a['total_areas_c']);
+
         return [
-            'areas'          => $areas,
-            'total_students' => count($students),
-            'general_info'   => $generalInfo,
+            'areas'            => $areas,
+            'total_students'   => count($students),
+            'general_info'     => $generalInfo,
+            'at_risk_students' => $atRiskStudents,
         ];
+
+
+
     }
 
     private function extractCompetencias($rows)
@@ -429,21 +460,22 @@ class AnalysisController extends Controller
     {
         $areas = $siagieData['areas'];
 
-        // Ordenar por % de inicio (C) — las más críticas primero
         uasort($areas, fn($a, $b) => $b['pct_inicio'] <=> $a['pct_inicio']);
 
         $criticalAreas = array_filter($areas, fn($a) => $a['pct_inicio'] > 30);
         $strongAreas   = array_filter($areas, fn($a) => $a['pct_logro'] > 60);
 
         return [
-            'total_students' => $siagieData['total_students'],
-            'total_areas'    => count($areas),
-            'areas'          => $areas,
-            'critical_count' => count($criticalAreas),
-            'strong_count'   => count($strongAreas),
-            'general_info'   => $siagieData['general_info'],
+            'total_students'   => $siagieData['total_students'],
+            'total_areas'      => count($areas),
+            'areas'            => $areas,
+            'critical_count'   => count($criticalAreas),
+            'strong_count'     => count($strongAreas),
+            'general_info'     => $siagieData['general_info'],
+            'at_risk_students' => $siagieData['at_risk_students'] ?? [],
         ];
     }
+    
 
     private function buildPrompt($upload, $summaryData, $siagieData)
     {
@@ -466,6 +498,19 @@ class AnalysisController extends Controller
         $periodo = $info['periodo'] ?? $upload->academic_year;
         $grado  = $info['grado'] ?? '';
 
+        // Agregar estudiantes en riesgo al prompt
+        $atRiskTexto = '';
+        if (!empty($summaryData['at_risk_students'])) {
+            $atRiskTexto = "\nESTUDIANTES IDENTIFICADOS EN RIESGO (C en 2+ áreas):\n";
+            foreach (array_slice($summaryData['at_risk_students'], 0, 10) as $st) {
+                $areas = implode(', ', $st['areas_en_inicio']);
+                $atRiskTexto .= "- {$st['nombre']}: en inicio en {$st['total_areas_c']} áreas ({$areas})\n";
+            }
+            if (count($summaryData['at_risk_students']) > 10) {
+                $atRiskTexto .= "... y " . (count($summaryData['at_risk_students']) - 10) . " estudiantes más.\n";
+            }
+        }
+
         return "Eres un experto en análisis educativo del sistema peruano (EBR) y en el Currículo Nacional (CNEB). Analiza los datos SIAGIE de esta institución.
 
     INSTITUCIÓN: {$ie}
@@ -484,7 +529,7 @@ class AnalysisController extends Controller
 
     INSTRUCCIÓN PEDAGÓGICA IMPORTANTE:
     Analiza las competencias de forma HOLÍSTICA por área — no como elementos aislados. Identifica patrones transversales entre competencias del mismo campo. Cuando una competencia está crítica, analiza cómo afecta al desarrollo integral del área.
-
+    {$atRiskTexto}    
     Responde ÚNICAMENTE en formato JSON con esta estructura:
     {
         \"analysis\": \"Análisis narrativo holístico en 3-4 párrafos. Para cada área crítica menciona qué competencias específicas concentran la dificultad y cómo se relacionan entre sí. Usa los nombres reales de las competencias del CNEB.\",

@@ -170,6 +170,63 @@
 </div>
 @endif
 
+{{-- Lista de estudiantes en riesgo --}}
+@if(!empty($report->at_risk_students['students_list']))
+<div class="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+    <h3 class="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+        Estudiantes identificados en riesgo
+        <span class="ml-auto text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">
+            {{ count($report->at_risk_students['students_list']) }} estudiantes
+        </span>
+    </h3>
+    <p class="text-xs text-gray-400 mb-4">Estudiantes con nivel de inicio (C) en 2 o más áreas curriculares — requieren atención prioritaria.</p>
+
+    <div class="overflow-hidden border border-gray-100 rounded-xl">
+        <table class="w-full text-xs">
+            <thead>
+                <tr class="bg-gray-50">
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-600">#</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-600">Estudiante</th>
+                    <th class="px-4 py-2.5 text-center font-medium text-gray-600">Áreas en inicio</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-600">Áreas afectadas</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                @foreach($report->at_risk_students['students_list'] as $idx => $student)
+                <tr class="{{ $student['total_areas_c'] >= 4 ? 'bg-red-50' : '' }} hover:bg-gray-50 transition-all">
+                    <td class="px-4 py-2.5 text-gray-400 font-mono">{{ $idx + 1 }}</td>
+                    <td class="px-4 py-2.5 font-medium text-gray-900">{{ $student['nombre'] }}</td>
+                    <td class="px-4 py-2.5 text-center">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+                            {{ $student['total_areas_c'] >= 4 ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700' }}">
+                            {{ $student['total_areas_c'] }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2.5">
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($student['areas_en_inicio'] as $area)
+                            <span class="bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                                {{ $area }}
+                            </span>
+                            @endforeach
+                        </div>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    @if(($report->at_risk_students['count'] ?? 0) > count($report->at_risk_students['students_list']))
+    <p class="text-xs text-gray-400 mt-3 text-center">
+        Mostrando {{ count($report->at_risk_students['students_list']) }} de {{ $report->at_risk_students['count'] }} estudiantes en riesgo.
+        Para ver la lista completa sube todos los archivos y genera un análisis institucional.
+    </p>
+    @endif
+</div>
+@endif
+
 {{-- Botón generar plan --}}
 <div class="flex gap-3">
     <form action="{{ route('plans.generate', $report) }}" method="POST">
