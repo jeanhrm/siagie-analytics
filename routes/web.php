@@ -53,9 +53,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/plans/{plan}', [ImprovementPlanController::class, 'update'])
         ->name('plans.update');
 
-    Route::get('/chat', [ChatController::class, 'index'])
-        ->name('chat.index')
-        ->middleware('role:docente,director');
+    
     Route::post('/chat', [ChatController::class, 'send'])
         ->name('chat.send');
 
