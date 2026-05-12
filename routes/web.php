@@ -54,11 +54,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('plans.update');
 
     
+
+    Route::get('/chat', [ChatController::class, 'index'])
+    ->name('chat.index');
     Route::post('/chat', [ChatController::class, 'send'])
         ->name('chat.send');
-
     Route::delete('/chat/clear', [ChatController::class, 'clear'])
-    ->name('chat.clear');
+        ->name('chat.clear');
 
     // Rutas de administración
     Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
