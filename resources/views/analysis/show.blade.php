@@ -23,6 +23,26 @@
     </div>
 </div>
 
+
+{{-- CHART DE BARRAS POR ÁREA --}}
+@if(!empty($report->summary_data['areas']))
+<div class="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+    <div class="flex items-center justify-between mb-5">
+        <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+            Distribución por área curricular
+        </h3>
+        <div class="flex items-center gap-4 text-xs text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-blue-500 rounded-sm inline-block"></span> AD</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-green-500 rounded-sm inline-block"></span> A</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-amber-400 rounded-sm inline-block"></span> B</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-400 rounded-sm inline-block"></span> C</span>
+        </div>
+    </div>
+    <canvas id="areasChart" height="120"></canvas>
+</div>
+@endif
+
 {{-- Análisis IA --}}
 <div class="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
     <div class="flex items-center gap-3 mb-4">
@@ -249,6 +269,87 @@
         Descargar PDF
     </a>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+@if(!empty($report->summary_data['areas']))
+const areasData = @json(array_values($report->summary_data['areas']));
 
+const labels = areasData.map(a => a.nombre);
+const dataAD  = areasData.map(a => a.distribucion.AD);
+const dataA   = areasData.map(a => a.distribucion.A);
+const dataB   = areasData.map(a => a.distribucion.B);
+const dataC   = areasData.map(a => a.distribucion.C);
+
+const ctx = document.getElementById('areasChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [
+            {
+                label: 'AD — Logro destacado',
+                data: dataAD,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4,
+            },
+            {
+                label: 'A — Logro esperado',
+                data: dataA,
+                backgroundColor: '#22c55e',
+                borderRadius: 4,
+            },
+            {
+                label: 'B — En proceso',
+                data: dataB,
+                backgroundColor: '#f59e0b',
+                borderRadius: 4,
+            },
+            {
+                label: 'C — En inicio',
+                data: dataC,
+                backgroundColor: '#ef4444',
+                borderRadius: 4,
+            },
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                callbacks: {
+                    title: (items) => items[0].label,
+                    label: (item) => ` ${item.dataset.label}: ${item.raw} estudiantes`,
+                }
+            }
+        },
+        scales: {
+            x: {
+                stacked: false,
+                grid: { display: false },
+                ticks: {
+                    font: { size: 10 },
+                    maxRotation: 45,
+                    minRotation: 30,
+                }
+            },
+            y: {
+                stacked: false,
+                grid: { color: '#f1f5f9' },
+                ticks: { font: { size: 10 } },
+                title: {
+                    display: true,
+                    text: 'N° de estudiantes',
+                    font: { size: 10 },
+                    color: '#9ca3af',
+                }
+            }
+        }
+    }
+});
+@endif
+</script>
 
 @endsection

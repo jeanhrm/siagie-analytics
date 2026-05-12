@@ -150,59 +150,112 @@
 </div>
 @endif
 
-{{-- RESULTADOS POR ÁREA Y COMPETENCIA --}}
-<div class="page-break"></div>
-<div class="section" style="margin-top:24px;">
-    <div class="section-title">Resultados por Área y Competencia</div>
-
-    @foreach($report->summary_data['areas'] ?? [] as $areaName => $area)
+{{-- ESTUDIANTES EN RIESGO --}}
+@if(!empty($report->at_risk_students['students_list']))
+<div class="section">
+    <div class="section-title">Estudiantes Identificados en Riesgo</div>
+    <p style="font-size:9px; color:#6b7280; margin-bottom:8px;">
+        Estudiantes con nivel de inicio (C) en 2 o más áreas curriculares — requieren atención prioritaria.
+    </p>
     <table class="comp-table">
         <thead>
             <tr>
-                <th colspan="6" style="background:#1e40af;">{{ $areaName }} — Logro: {{ $area['pct_logro'] }}% | Proceso: {{ $area['pct_proceso'] }}% | Inicio: {{ $area['pct_inicio'] }}%</th>
-            </tr>
-            <tr>
-                <th style="width:35%">Competencia</th>
-                <th style="width:6%; text-align:center;">AD</th>
-                <th style="width:6%; text-align:center;">A</th>
-                <th style="width:6%; text-align:center;">B</th>
-                <th style="width:6%; text-align:center;">C</th>
-                <th style="width:41%">Distribución</th>
+                <th style="width:5%">#</th>
+                <th style="width:40%">Estudiante</th>
+                <th style="width:10%; text-align:center;">Áreas C</th>
+                <th style="width:45%">Áreas en inicio</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($area['distribucion_por_competencia'] ?? [] as $comp)
-            <tr>
-                <td><strong>{{ $comp['code'] }}</strong> {{ Str::limit($comp['name'], 50) }}</td>
-                <td style="text-align:center; color:#3b82f6; font-weight:bold;">{{ $comp['distribucion']['AD'] }}</td>
-                <td style="text-align:center; color:#22c55e; font-weight:bold;">{{ $comp['distribucion']['A'] }}</td>
-                <td style="text-align:center; color:#f59e0b; font-weight:bold;">{{ $comp['distribucion']['B'] }}</td>
-                <td style="text-align:center; color:#ef4444; font-weight:bold;">{{ $comp['distribucion']['C'] }}</td>
-                <td>
-                    @if($comp['total'] > 0)
-                    <div class="bar-container">
-                        @php
-                            $bAD = round($comp['distribucion']['AD'] / $comp['total'] * 100);
-                            $bA  = round($comp['distribucion']['A']  / $comp['total'] * 100);
-                            $bB  = round($comp['distribucion']['B']  / $comp['total'] * 100);
-                            $bC  = round($comp['distribucion']['C']  / $comp['total'] * 100);
-                        @endphp
-                        @if($bAD > 0)<div class="bar-ad" style="width:{{ $bAD }}%"></div>@endif
-                        @if($bA > 0)<div class="bar-a" style="width:{{ $bA }}%"></div>@endif
-                        @if($bB > 0)<div class="bar-b" style="width:{{ $bB }}%"></div>@endif
-                        @if($bC > 0)<div class="bar-c" style="width:{{ $bC }}%"></div>@endif
-                    </div>
-                    <div style="font-size:8px; color:#6b7280; margin-top:2px;">
-                        Logro: {{ $comp['pct_logro'] }}% | Inicio: {{ $comp['pct_inicio'] }}%
-                    </div>
-                    @endif
+            @foreach($report->at_risk_students['students_list'] as $idx => $student)
+            <tr style="{{ $student['total_areas_c'] >= 4 ? 'background:#fef2f2;' : '' }}">
+                <td style="text-align:center; color:#9ca3af;">{{ $idx + 1 }}</td>
+                <td style="font-weight:bold;">{{ $student['nombre'] }}</td>
+                <td style="text-align:center;">
+                    <span style="
+                        display:inline-block;
+                        width:20px; height:20px;
+                        border-radius:50%;
+                        text-align:center;
+                        line-height:20px;
+                        font-weight:bold;
+                        font-size:9px;
+                        {{ $student['total_areas_c'] >= 4 ? 'background:#ef4444; color:white;' : 'background:#fef3c7; color:#92400e;' }}
+                    ">{{ $student['total_areas_c'] }}</span>
+                </td>
+                <td style="font-size:9px; color:#b91c1c;">
+                    {{ implode(' · ', $student['areas_en_inicio']) }}
                 </td>
             </tr>
             @endforeach
         </tbody>
     </table>
-    @endforeach
 </div>
+@endif
+
+
+{{-- RESULTADOS POR ÁREA --}}
+<div class="page-break"></div>
+<div class="section" style="margin-top:24px;">
+    <div class="section-title">Resultados por Área Curricular</div>
+
+    <table class="comp-table">
+        <thead>
+            <tr>
+                <th style="width:35%">Área Curricular</th>
+                <th style="width:8%; text-align:center;">AD</th>
+                <th style="width:8%; text-align:center;">A</th>
+                <th style="width:8%; text-align:center;">B</th>
+                <th style="width:8%; text-align:center;">C</th>
+                <th style="width:12%; text-align:center;">% Logro</th>
+                <th style="width:12%; text-align:center;">% Inicio</th>
+                <th style="width:9%; text-align:center;">Nivel</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($report->summary_data['areas'] ?? [] as $areaName => $area)
+            @php
+                $nivel = $area['pct_inicio'] > 50 ? 'CRÍTICO' : ($area['pct_inicio'] > 30 ? 'RIESGO' : 'OK');
+                $nivelColor = $area['pct_inicio'] > 50 ? 'color:#dc2626; font-weight:bold;' : ($area['pct_inicio'] > 30 ? 'color:#d97706; font-weight:bold;' : 'color:#16a34a;');
+            @endphp
+            <tr>
+                <td style="font-weight:bold;">{{ $areaName }}</td>
+                <td style="text-align:center; color:#3b82f6; font-weight:bold;">{{ $area['distribucion']['AD'] }}</td>
+                <td style="text-align:center; color:#22c55e; font-weight:bold;">{{ $area['distribucion']['A'] }}</td>
+                <td style="text-align:center; color:#f59e0b; font-weight:bold;">{{ $area['distribucion']['B'] }}</td>
+                <td style="text-align:center; color:#ef4444; font-weight:bold;">{{ $area['distribucion']['C'] }}</td>
+                <td style="text-align:center;">
+                    <span style="color:#16a34a; font-weight:bold;">{{ $area['pct_logro'] }}%</span>
+                </td>
+                <td style="text-align:center;">
+                    <span style="{{ $nivelColor }}">{{ $area['pct_inicio'] }}%</span>
+                </td>
+                <td style="text-align:center; {{ $nivelColor }}">{{ $nivel }}</td>
+            </tr>
+
+            {{-- Competencias solo si NO es institucional --}}
+            @if($report->type !== 'institutional' && !empty($area['distribucion_por_competencia']))
+                @foreach($area['distribucion_por_competencia'] as $comp)
+                <tr style="background:#f8fafc;">
+                    <td style="padding-left:20px; color:#6b7280; font-size:9px;">
+                        <span style="font-weight:bold; font-family:monospace;">{{ $comp['code'] }}</span>
+                        {{ \Illuminate\Support\Str::limit($comp['name'], 45) }}
+                    </td>
+                    <td style="text-align:center; color:#3b82f6; font-size:9px;">{{ $comp['distribucion']['AD'] }}</td>
+                    <td style="text-align:center; color:#22c55e; font-size:9px;">{{ $comp['distribucion']['A'] }}</td>
+                    <td style="text-align:center; color:#f59e0b; font-size:9px;">{{ $comp['distribucion']['B'] }}</td>
+                    <td style="text-align:center; color:#ef4444; font-size:9px;">{{ $comp['distribucion']['C'] }}</td>
+                    <td style="text-align:center; font-size:9px;">{{ $comp['pct_logro'] }}%</td>
+                    <td style="text-align:center; font-size:9px;">{{ $comp['pct_inicio'] }}%</td>
+                    <td></td>
+                </tr>
+                @endforeach
+            @endif
+        </tbody>
+        @endforeach
+    </table>
+</div>
+
 
 {{-- PIE DE PÁGINA --}}
 <div class="footer">
