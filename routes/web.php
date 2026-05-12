@@ -52,6 +52,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('plans.show');
     Route::patch('/plans/{plan}', [ImprovementPlanController::class, 'update'])
         ->name('plans.update');
+    Route::get('/plans/{plan}/pdf', [ImprovementPlanController::class, 'exportPdf'])
+    ->name('plans.pdf');
 
     
 

@@ -156,4 +156,22 @@ Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
             return null;
         }
     }
+
+    public function exportPdf(ImprovementPlan $plan)
+    {
+        if ($plan->institution_id !== auth()->user()->institution_id) {
+            abort(403);
+        }
+
+        $plan->load('analysisReport');
+        $institution = auth()->user()->institution;
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('plans.pdf', compact('plan', 'institution'))
+            ->setPaper('a4', 'portrait');
+
+        $filename = 'plan-mejora-' . str_replace(' ', '-', strtolower($institution->name)) . '-' . $plan->academic_year . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
 }
