@@ -5,7 +5,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\ImprovementPlanController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
@@ -55,14 +54,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/plans/{plan}/pdf', [ImprovementPlanController::class, 'exportPdf'])
     ->name('plans.pdf');
 
-    
-
-    Route::get('/chat', [ChatController::class, 'index'])
-    ->name('chat.index');
-    Route::post('/chat', [ChatController::class, 'send'])
-        ->name('chat.send');
-    Route::delete('/chat/clear', [ChatController::class, 'clear'])
-        ->name('chat.clear');
 
     // Rutas de administración
     Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
