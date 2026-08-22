@@ -138,7 +138,7 @@ Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
                 'content-type'      => 'application/json',
             ])->timeout(60)->post('https://api.anthropic.com/v1/messages', [
                 'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5'),
-                'max_tokens' => 3000,
+                'max_tokens' => 6000,
                 'messages'   => [
                     ['role' => 'user', 'content' => $prompt]
                 ],

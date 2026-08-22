@@ -564,16 +564,10 @@ class AnalysisController extends Controller
                 'content-type'      => 'application/json',
             ])->timeout(60)->post('https://api.anthropic.com/v1/messages', [
                 'model'      => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5'),
-                'max_tokens' => 4000,
+                'max_tokens' => 6000,
                 'messages'   => [
                     ['role' => 'user', 'content' => $prompt]
                 ],
-            ]);
-
-            // Log para ver qué responde la API
-            \Log::info('Claude API response', [
-                'status' => $response->status(),
-                'body'   => $response->json(),
             ]);
 
             $text = $response->json()['content'][0]['text'] ?? null;
