@@ -563,11 +563,17 @@ class AnalysisController extends Controller
                 'anthropic-version' => '2023-06-01',
                 'content-type'      => 'application/json',
             ])->timeout(60)->post('https://api.anthropic.com/v1/messages', [
-                'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5'),
-                'max_tokens' => 2000,
+                'model'      => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5'),
+                'max_tokens' => 4000,
                 'messages'   => [
                     ['role' => 'user', 'content' => $prompt]
                 ],
+            ]);
+
+            // Log para ver qué responde la API
+            \Log::info('Claude API response', [
+                'status' => $response->status(),
+                'body'   => $response->json(),
             ]);
 
             $text = $response->json()['content'][0]['text'] ?? null;
@@ -579,6 +585,7 @@ class AnalysisController extends Controller
             return json_decode($text, true);
 
         } catch (\Exception $e) {
+            \Log::error('Claude API error', ['message' => $e->getMessage()]);
             return null;
         }
     }
