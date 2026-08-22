@@ -131,22 +131,18 @@ Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
 
     private function callClaude($prompt)
     {
+        set_time_limit(180);
         try {
             $response = Http::withHeaders([
                 'x-api-key'         => config('services.anthropic.key'),
                 'anthropic-version' => '2023-06-01',
                 'content-type'      => 'application/json',
-            ])->timeout(60)->post('https://api.anthropic.com/v1/messages', [
+            ])->timeout(120)->post('https://api.anthropic.com/v1/messages', [
                 'model'      => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5'),
                 'max_tokens' => 6000,
                 'messages'   => [
                     ['role' => 'user', 'content' => $prompt]
                 ],
-            ]);
-
-            \Log::info('Claude Plan response', [
-                'status' => $response->status(),
-                'body'   => $response->json(),
             ]);
 
             $text = $response->json()['content'][0]['text'] ?? null;
@@ -158,7 +154,6 @@ Responde ÚNICAMENTE en formato JSON con esta estructura exacta:
             return json_decode($text, true);
 
         } catch (\Exception $e) {
-            \Log::error('Claude Plan error', ['message' => $e->getMessage()]);
             return null;
         }
     }
